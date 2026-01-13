@@ -2,6 +2,7 @@ services:
   - type: web
     name: mail-app
     env: docker
+    plan: free # Explicitly set the plan to free to avoid payment prompts
     # The root of the service, relative to the repo root
     dockerContext: ./mail-backend
     # Path to the new Render-specific Dockerfile
