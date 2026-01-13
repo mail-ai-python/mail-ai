@@ -3,7 +3,6 @@ services:
   - type: web
     name: auth-service
     env: docker
-    plan: free
     # The root of the service, relative to the repo root
     dockerContext: ./mail-backend
     dockerfilePath: ./mail-backend/services/auth_service/DockerFile
@@ -15,7 +14,6 @@ services:
   - type: worker
     name: event-processor
     env: docker
-    plan: free
     # The root of the service, relative to the repo root
     dockerContext: ./mail-backend
     dockerfilePath: ./mail-backend/services/event_processor/Dockerfile
