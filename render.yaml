@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mail-app
+    env: docker
+    # The root of the service, relative to the repo root
+    dockerContext: ./mail-backend
+    # Path to the new Render-specific Dockerfile
+    dockerfilePath: ./mail-backend/Dockerfile.render
+    envVars:
+      - key: PYTHONPATH
+        value: /app
+      # Render will automatically provide the PORT variable
