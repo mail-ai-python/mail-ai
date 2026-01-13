@@ -48,7 +48,10 @@ class Settings(BaseSettings):
     """
 
     # CORS settings
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: List[str] = [
+        "http://localhost:3000",  # For local development
+        "https://your-frontend-url.netlify.app"  # <-- IMPORTANT: REPLACE THIS
+    ]
     cors_allow_credentials: bool = True
     cors_allow_methods: List[str] = ["*"]
     cors_allow_headers: List[str] = ["*"]
