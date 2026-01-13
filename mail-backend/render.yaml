@@ -1,0 +1,22 @@
+services:
+  # A web service for the auth API
+  - type: web
+    name: auth-service
+    env: docker
+    plan: free
+    dockerfilePath: ./services/auth_service/DockerFile
+    envVars:
+      - key: PYTHONPATH
+        value: /app
+      # Render automatically sets the PORT environment variable
+      # and the Dockerfile is already configured to use it.
+
+  # A background worker for processing events
+  - type: worker
+    name: event-processor
+    env: docker
+    plan: free
+    dockerfilePath: ./services/event_processor/Dockerfile
+    envVars:
+      - key: PYTHONPATH
+        value: /app
