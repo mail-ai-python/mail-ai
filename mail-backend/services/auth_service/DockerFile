@@ -1,0 +1,19 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# By default, Cloud Run provides a PORT env var (usually 8080)
+# We set a default here for local testing, but it will be overridden in the cloud.
+ENV PORT 8000
+
+# Install dependencies
+COPY services/auth_service/requirement.txt .
+RUN pip install --no-cache-dir -r requirement.txt
+
+# Copy all project code into the container
+# This ensures all imports like 'common.database' work
+COPY . .
+
+# Command to run the API using the PORT variable
+# The shell form is used to allow environment variable substitution
+CMD uvicorn services.auth_service.main:app --host 0.0.0.0 --port $PORT

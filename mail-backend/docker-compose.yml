@@ -1,0 +1,27 @@
+services:
+  # 1. Auth Service (API)
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth_service/DockerFile
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app
+      - BACKEND_PORT=${BACKEND_PORT}
+    volumes:
+      # Mount the entire backend for live reloading
+      - .:/app
+
+  # 2. Event Processor (Worker)
+  event-processor:
+    build:
+      context: .
+      dockerfile: services/event_processor/Dockerfile
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      # Mount the entire backend for live reloading
+      - .:/app

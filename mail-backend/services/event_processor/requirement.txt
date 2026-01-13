@@ -1,0 +1,6 @@
+google-cloud-pubsub
+google-auth
+google-api-python-client
+motor
+google-generativeai
+python-dotenv
