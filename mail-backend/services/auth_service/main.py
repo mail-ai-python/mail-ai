@@ -34,8 +34,9 @@ SCOPES = [
 ]
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 PROJECT_ID = os.getenv("PROJECT_ID")
-# Use env variable for topic name, with a default
 GMAIL_TOPIC_NAME = os.getenv("GMAIL_TOPIC_NAME", "gmail-events")
+# Use env variable for the frontend URL, with a default for local dev
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 app = FastAPI()
@@ -165,4 +166,6 @@ async def callback(
     await user_repo.create_or_update_user(user_data)
     print(f"[Auth Callback] User {email} saved to DB. Watch status: {watch_status}")
 
-    return RedirectResponse(f"http://localhost:3000/success?email={email}&status={watch_status}")
+    # Use the environment variable for the redirect
+    redirect_url = f"{FRONTEND_URL}/success?email={email}&status={watch_status}"
+    return RedirectResponse(redirect_url)
