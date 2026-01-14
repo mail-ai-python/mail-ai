@@ -9,8 +9,9 @@ load_dotenv()
 
 # --- 2. CONFIGURATION ---
 PROJECT_ID = os.getenv("PROJECT_ID")
-# Securely load the service account JSON from an environment variable
 SERVICE_ACCOUNT_JSON_STR = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+# Use env variable for subscription ID, with a default
+GMAIL_SUBSCRIPTION_ID = os.getenv("GMAIL_SUBSCRIPTION_ID", "gmail-events-sub")
 
 if not PROJECT_ID:
     print("ERROR: PROJECT_ID is missing. Check .env", file=sys.stderr)
@@ -27,11 +28,14 @@ from common.user_repository import MongoUserRepository
 from common.email_repository import MongoEmailRepository
 from services.event_processor.processor import EmailProcessor
 
-SUB_NAME = f"projects/{PROJECT_ID}/subscriptions/gmail-events-sub"
+# Construct the full subscription path
+SUB_NAME = f"projects/{PROJECT_ID}/subscriptions/{GMAIL_SUBSCRIPTION_ID}"
 MAIN_LOOP = None
 processor = None
 
 def callback(message):
+    # --- THIS IS THE NEW LOG ---
+    print("[Pub/Sub Callback] Message received from Google Cloud.")
     try:
         data = json.loads(message.data.decode('utf-8'))
         email_address = data.get('emailAddress')

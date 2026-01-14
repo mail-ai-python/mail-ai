@@ -1,4 +1,5 @@
 import os
+import sys
 import asyncio
 from datetime import datetime
 from collections import deque
@@ -27,41 +28,56 @@ class EmailProcessor:
 
     async def process_event(self, email_address, history_id):
         try:
+            print(f"[Processor] Starting event for {email_address}")
             user = await self.user_repo.get_user_by_email(email_address)
             if not user or not user.get('is_active', False):
-                if user: print(f"[Ignored] User {email_address} is INACTIVE.")
+                if user: print(f"[Processor] User {email_address} is INACTIVE. Skipping.")
+                else: print(f"[Processor] User {email_address} not found. Skipping.")
                 return
 
+            print("[Processor] Refreshing user credentials...")
             creds = Credentials(
                 None, refresh_token=user['refresh_token'],
                 token_uri="https://oauth2.googleapis.com/token",
                 client_id=os.getenv("GOOGLE_CLIENT_ID"),
                 client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
             )
-            if not creds.valid: creds.refresh(Request())
+            if not creds.valid:
+                try:
+                    creds.refresh(Request())
+                    print("[Processor] Credentials refreshed successfully.")
+                except Exception as e:
+                    print(f"[Processor] CRITICAL: Failed to refresh credentials for {email_address}. Error: {e}", file=sys.stderr)
+                    return
+
             service = build('gmail', 'v1', credentials=creds)
 
             results = service.users().messages().list(userId='me', maxResults=1).execute()
-            if not results.get('messages', []): return
+            if not results.get('messages', []):
+                print("[Processor] No new messages found.")
+                return
             
             msg_id = results['messages'][0]['id']
             thread_id = results['messages'][0]['threadId']
-
-            msg_meta = service.users().messages().get(userId='me', id=msg_id, format='minimal').execute()
-            internal_date = int(msg_meta['internalDate']) / 1000
-            email_time = datetime.fromtimestamp(internal_date)
-            
-            last_started = user.get('last_started_at')
-            if last_started and email_time < last_started:
-                print(f"[Skipping] Old email from {email_time}")
-                return
+            print(f"[Processor] Found new message: ID {msg_id}")
 
             if self.history.is_seen(msg_id) or await self.email_repo.get_email_log_by_message_id(msg_id):
+                print(f"[Processor] Message {msg_id} already processed. Skipping.")
                 self.history.add(msg_id)
                 return
 
             msg = service.users().messages().get(userId='me', id=msg_id).execute()
-            if 'DRAFT' in msg.get('labelIds', []): return
+            if 'DRAFT' in msg.get('labelIds', []):
+                print(f"[Processor] Message {msg_id} is a draft. Skipping.")
+                return
+
+            internal_date = int(msg.get('internalDate', 0)) / 1000
+            email_time = datetime.fromtimestamp(internal_date)
+
+            last_started = user.get('last_started_at')
+            if last_started and email_time < last_started:
+                print(f"[Processor] Message {msg_id} is older than last start time. Skipping.")
+                return
 
             direction = "outbound" if 'SENT' in msg.get('labelIds', []) else "inbound"
             headers = msg['payload']['headers']
@@ -69,8 +85,7 @@ class EmailProcessor:
             sender = next((h['value'] for h in headers if h['name'] == 'From'), "Unknown")
             snippet = msg.get('snippet', '')
 
-            print(f"Processing Mail from: {sender} (Thread: {thread_id})")
-
+            print(f"[Processor] Getting context for thread {thread_id}...")
             user_depth = user.get('settings', {}).get('context_depth', 10)
             context_str = await self.context_engine.get_thread_context(
                 thread_id=thread_id,
@@ -81,13 +96,17 @@ class EmailProcessor:
             )
         
             final_prompt = self.prompt_builder.build(context_str=context_str, email_content=snippet)
-
+            print("[Processor] Generating AI summary...")
+            summary = ""
+            ai_provider = ""
             try:
                 ai_provider = user.get('settings', {}).get('ai_provider', 'gemini')
                 ai_service = AIFactory.get_service(ai_provider)
                 summary = ai_service.summarize(final_prompt, "Context-Aware Summary")
+                print("[Processor] AI summary generated successfully.")
             except Exception as e:
-                summary = f"[AI ERROR]: {e}"
+                summary = f"[AI ERROR]: Could not generate summary. Details: {e}"
+                print(f"[Processor] {summary}", file=sys.stderr)
 
             log_entry = EmailLog(
                 user_email=email_address, message_id=msg_id, thread_id=thread_id,
@@ -97,7 +116,9 @@ class EmailProcessor:
             
             await self.email_repo.insert_email_logs([log_entry.dict()])
             self.history.add(msg_id)
-            print(f"SUCCESS: Saved Context-Aware Summary for {email_address}")
+            print(f"[Processor] SUCCESS: Saved log for message {msg_id} for user {email_address}")
 
         except Exception as e:
-            print(f"PROCESSOR ERROR: {e}")
+            import traceback
+            print(f"[Processor] UNHANDLED ERROR in process_event for {email_address}: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
