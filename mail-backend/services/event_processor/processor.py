@@ -96,6 +96,13 @@ class EmailProcessor:
             )
         
             final_prompt = self.prompt_builder.build(context_str=context_str, email_content=snippet)
+            custom_prompt = user.get("custom_prompt")
+            final_prompt = self.prompt_builder.build(
+                context_str=context_str,
+                email_content=snippet,
+                custom_template=custom_prompt
+            )
+
             print("[Processor] Generating AI summary...")
             summary = ""
             ai_provider = ""

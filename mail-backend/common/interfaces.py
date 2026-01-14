@@ -31,6 +31,11 @@ class IUserRepository(ABC):
         """Update user's active status."""
         pass
 
+    @abstractmethod
+    async def update_user_prompt(self, email: str, prompt: str) -> None:
+        """Update or set the custom prompt for a user."""
+        pass
+
 
 class IEmailRepository(ABC):
     """

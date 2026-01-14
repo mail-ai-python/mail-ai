@@ -71,3 +71,16 @@ class MongoUserRepository(IUserRepository):
             {"email": email},
             {"$set": update_data}
         )
+    async def update_user_prompt(self, email: str, prompt: str) -> None:
+        """
+        Update or set the custom prompt for a user.
+
+        Args:
+            email: User's email address.
+            prompt: The custom prompt text.
+        """
+        await self._collection.update_one(
+            {"email": email},
+            {"$set": {"custom_prompt": prompt}}
+        )
+

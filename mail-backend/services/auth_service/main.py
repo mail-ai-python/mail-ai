@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 from typing import Optional
 from datetime import datetime
 from fastapi import FastAPI, Depends
@@ -22,11 +21,7 @@ from common.email_repository import MongoEmailRepository
 from common.interfaces import IUserRepository, IEmailRepository
 
 # --- 3. CONFIGURATION ---
-CLIENT_SECRETS_JSON_STR = os.getenv("GOOGLE_CLIENT_SECRETS_JSON")
-if not CLIENT_SECRETS_JSON_STR:
-    raise ValueError("GOOGLE_CLIENT_SECRETS_JSON environment variable not set")
-CLIENT_CONFIG = json.loads(CLIENT_SECRETS_JSON_STR)
-
+CLIENT_SECRETS_FILE = "services/auth_service/client_secret.json"
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/userinfo.email',
@@ -34,10 +29,6 @@ SCOPES = [
 ]
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 PROJECT_ID = os.getenv("PROJECT_ID")
-GMAIL_TOPIC_NAME = os.getenv("GMAIL_TOPIC_NAME", "gmail-events")
-# Use env variable for the frontend URL, with a default for local dev
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
 
 app = FastAPI()
 
@@ -69,6 +60,9 @@ async def shutdown():
 class UserCheckRequest(BaseModel):
     email: str
 
+class UpdatePromptRequest(BaseModel):
+    email: str
+    prompt: str
 # --- 7. API ENDPOINTS ---
 
 @app.post("/api/check-user")
@@ -81,6 +75,7 @@ async def check_user(
         return {
             "exists": True,
             "is_active": user.get("is_active", False),
+            "custom_prompt": user.get("custom_prompt", ""),
             "redirect": "/dashboard"
         }
     return {"exists": False, "redirect": "/auth"}
@@ -112,10 +107,21 @@ async def toggle_status(
     
     return {"status": "success", "is_active": new_status}
 
+@app.post("/api/user/prompt")
+async def update_prompt(
+    request: UpdatePromptRequest,
+    user_repo: IUserRepository = Depends(get_user_repo)
+):
+    await user_repo.update_user_prompt(request.email, request.prompt)
+    return {"status": "success", "message": "Prompt updated successfully."}
+
 @app.get("/login")
 def login(email_hint: Optional[str] = None):
-    flow = Flow.from_client_config(
-        CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI
+    if not os.path.exists(CLIENT_SECRETS_FILE):
+        return {"error": "client_secret.json missing"}
+
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
     
     auth_url, _ = flow.authorization_url(prompt='consent', login_hint=email_hint)
@@ -126,31 +132,22 @@ async def callback(
     code: str,
     user_repo: IUserRepository = Depends(get_user_repo)
 ):
-    print("[Auth Callback] Received callback code.")
-    flow = Flow.from_client_config(
-        CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
     flow.fetch_token(code=code)
     creds = flow.credentials
-    print("[Auth Callback] Token fetched successfully.")
 
     service = build('oauth2', 'v2', credentials=creds)
     email = service.userinfo().get().execute()['email']
-    print(f"[Auth Callback] User email: {email}")
 
-    watch_status = "Not Set"
     try:
-        print("[Auth Callback] Attempting to set up Gmail watch...")
         gmail_service = build('gmail', 'v1', credentials=creds)
-        topic_name = f"projects/{PROJECT_ID}/topics/{GMAIL_TOPIC_NAME}"
-        request_body = {'labelIds': ['INBOX'], 'topicName': topic_name}
-        print(f"[Auth Callback] Watch request body: {request_body}")
+        request_body = {'labelIds': ['INBOX'], 'topicName': f"projects/{PROJECT_ID}/topics/gmail-events"}
         gmail_service.users().watch(userId='me', body=request_body).execute()
         watch_status = "Active"
-        print("[Auth Callback] Gmail watch setup successful.")
     except Exception as e:
         watch_status = f"Failed ({e})"
-        print(f"[Auth Callback] CRITICAL: Gmail watch setup failed. Error: {e}", file=sys.stderr)
 
     user_data = {
         "email": email,
@@ -164,8 +161,5 @@ async def callback(
         user_data["is_active"] = False
     
     await user_repo.create_or_update_user(user_data)
-    print(f"[Auth Callback] User {email} saved to DB. Watch status: {watch_status}")
 
-    # Use the environment variable for the redirect
-    redirect_url = f"{FRONTEND_URL}/success?email={email}&status={watch_status}"
-    return RedirectResponse(redirect_url)
+    return RedirectResponse(f"http://localhost:3000/success?email={email}&status={watch_status}")
