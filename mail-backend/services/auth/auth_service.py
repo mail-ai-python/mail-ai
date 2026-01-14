@@ -7,6 +7,7 @@ Principle by focusing solely on authentication operations.
 """
 
 import os
+import json
 from typing import Optional, Dict, Any
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -25,10 +26,12 @@ class GoogleAuthService(IAuthService):
         """
         Initialize GoogleAuthService with OAuth configuration.
         """
-        self._client_secrets_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "client_secret.json"
-        )
+        # Load client secrets from environment variable
+        client_secrets_str = os.getenv("GOOGLE_CLIENT_SECRETS")
+        if not client_secrets_str:
+            raise ValueError("GOOGLE_CLIENT_SECRETS environment variable not set")
+        self._client_config = json.loads(client_secrets_str)
+
         self._scopes = [
             'https://www.googleapis.com/auth/gmail.readonly',
             'https://www.googleapis.com/auth/userinfo.email',
@@ -45,15 +48,9 @@ class GoogleAuthService(IAuthService):
 
         Returns:
             Authorization URL string.
-
-        Raises:
-            FileNotFoundError: If client_secret.json is missing.
         """
-        if not os.path.exists(self._client_secrets_file):
-            raise FileNotFoundError("client_secret.json missing")
-
-        flow = Flow.from_client_secrets_file(
-            self._client_secrets_file,
+        flow = Flow.from_client_config(
+            self._client_config,
             scopes=self._scopes,
             redirect_uri=self._redirect_uri
         )
@@ -74,8 +71,8 @@ class GoogleAuthService(IAuthService):
         Returns:
             Dict containing user email and watch status.
         """
-        flow = Flow.from_client_secrets_file(
-            self._client_secrets_file,
+        flow = Flow.from_client_config(
+            self._client_config,
             scopes=self._scopes,
             redirect_uri=self._redirect_uri
         )

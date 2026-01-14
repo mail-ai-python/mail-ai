@@ -9,11 +9,14 @@ load_dotenv()
 
 # --- 2. CONFIGURATION ---
 PROJECT_ID = os.getenv("PROJECT_ID")
-SERVICE_ACCOUNT_RAW = os.getenv("SERVICE_ACCOUNT_FILE", "services/event_processor/service_account.json")
-SERVICE_ACCOUNT_FILE = SERVICE_ACCOUNT_RAW
+# Securely load the service account JSON from an environment variable
+SERVICE_ACCOUNT_JSON_STR = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 
 if not PROJECT_ID:
     print("ERROR: PROJECT_ID is missing. Check .env", file=sys.stderr)
+    sys.exit(1)
+if not SERVICE_ACCOUNT_JSON_STR:
+    print("ERROR: GOOGLE_SERVICE_ACCOUNT_JSON is missing. Check .env", file=sys.stderr)
     sys.exit(1)
 
 # --- 3. IMPORTS ---
@@ -57,7 +60,10 @@ async def main():
     email_repo = MongoEmailRepository(db.get_db())
     processor = EmailProcessor(user_repo, email_repo)
 
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE)
+    # Load credentials directly from the environment variable string
+    service_account_info = json.loads(SERVICE_ACCOUNT_JSON_STR)
+    creds = service_account.Credentials.from_service_account_info(service_account_info)
+
     subscriber = pubsub_v1.SubscriberClient(credentials=creds)
     
     print(f"Listening on subscription: {SUB_NAME}...")

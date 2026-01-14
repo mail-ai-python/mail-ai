@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from typing import Optional
 from datetime import datetime
 from fastapi import FastAPI, Depends
@@ -21,7 +22,12 @@ from common.email_repository import MongoEmailRepository
 from common.interfaces import IUserRepository, IEmailRepository
 
 # --- 3. CONFIGURATION ---
-CLIENT_SECRETS_FILE = "services/auth_service/client_secret.json"
+# Securely load client secrets from environment variable
+CLIENT_SECRETS_JSON_STR = os.getenv("GOOGLE_CLIENT_SECRETS_JSON")
+if not CLIENT_SECRETS_JSON_STR:
+    raise ValueError("GOOGLE_CLIENT_SECRETS_JSON environment variable not set")
+CLIENT_CONFIG = json.loads(CLIENT_SECRETS_JSON_STR)
+
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/userinfo.email',
@@ -105,11 +111,8 @@ async def toggle_status(
 
 @app.get("/login")
 def login(email_hint: Optional[str] = None):
-    if not os.path.exists(CLIENT_SECRETS_FILE):
-        return {"error": "client_secret.json missing"}
-        
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
+    flow = Flow.from_client_config(
+        CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
     
     auth_url, _ = flow.authorization_url(prompt='consent', login_hint=email_hint)
@@ -120,8 +123,8 @@ async def callback(
     code: str,
     user_repo: IUserRepository = Depends(get_user_repo)
 ):
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
+    flow = Flow.from_client_config(
+        CLIENT_CONFIG, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
     flow.fetch_token(code=code)
     creds = flow.credentials
