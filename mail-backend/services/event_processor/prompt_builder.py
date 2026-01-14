@@ -1,16 +1,17 @@
 import os
+from typing import Optional
 
 class PromptBuilder:
     # A safe default just in case .env is missing
     DEFAULT_TEMPLATE = """
     You are a helpful assistant.
-    
+
     PREVIOUS CONTEXT:
     {context}
-    
+
     NEW EMAIL:
     {email_content}
-    
+
     TASK:
     Summarize the new email. If it refers to the context, explain the connection.
     """
@@ -29,10 +30,10 @@ class PromptBuilder:
         """
         # Use the user's custom template if provided, otherwise use the default
         template = custom_template if custom_template else self.default_template
-
+        template = custom_template if custom_template and custom_template.strip() else self.default_template
         # If no context exists, we can provide a friendly placeholder
         clean_context = context_str if context_str else "No previous conversation history."
-        
+
         try:
             # Inject the data into the template
             return template.format(

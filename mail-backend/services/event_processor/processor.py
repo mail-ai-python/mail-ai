@@ -43,12 +43,8 @@ class EmailProcessor:
                 client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
             )
             if not creds.valid:
-                try:
-                    creds.refresh(Request())
-                    print("[Processor] Credentials refreshed successfully.")
-                except Exception as e:
-                    print(f"[Processor] CRITICAL: Failed to refresh credentials for {email_address}. Error: {e}", file=sys.stderr)
-                    return
+                creds.refresh(Request())
+                print("[Processor] Credentials refreshed successfully.")
 
             service = build('gmail', 'v1', credentials=creds)
 
@@ -95,7 +91,7 @@ class EmailProcessor:
                 limit=user_depth
             )
         
-            final_prompt = self.prompt_builder.build(context_str=context_str, email_content=snippet)
+#             final_prompt = self.prompt_builder.build(context_str=context_str, email_content=snippet)
             custom_prompt = user.get("custom_prompt")
             final_prompt = self.prompt_builder.build(
                 context_str=context_str,

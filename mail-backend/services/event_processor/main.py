@@ -65,11 +65,14 @@ async def main():
     processor = EmailProcessor(user_repo, email_repo)
 
     # Load credentials directly from the environment variable string
-    service_account_info = json.loads(SERVICE_ACCOUNT_JSON_STR)
-    creds = service_account.Credentials.from_service_account_info(service_account_info)
+    try:
+        service_account_info = json.loads(SERVICE_ACCOUNT_JSON_STR)
+        creds = service_account.Credentials.from_service_account_info(service_account_info)
 
-    subscriber = pubsub_v1.SubscriberClient(credentials=creds)
-    
+        subscriber = pubsub_v1.SubscriberClient(credentials=creds)
+    except Exception as e:
+        printf(f"CRITICAL ERROR creating SubscriberClient: {e}", file=sys.stderr)
+        return
     print(f"Listening on subscription: {SUB_NAME}...")
     
     future = subscriber.subscribe(SUB_NAME, callback=callback)

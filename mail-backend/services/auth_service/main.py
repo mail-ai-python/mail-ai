@@ -29,6 +29,8 @@ SCOPES = [
 ]
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 PROJECT_ID = os.getenv("PROJECT_ID")
+TOPIC_NAME = os.getenv("GMAIL_TOPIC_NAME", "gmail-events") # Default for safety
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000") # Default for safety
 
 app = FastAPI()
 
@@ -119,7 +121,7 @@ async def update_prompt(
 def login(email_hint: Optional[str] = None):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return {"error": "client_secret.json missing"}
-
+        
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
@@ -143,7 +145,7 @@ async def callback(
 
     try:
         gmail_service = build('gmail', 'v1', credentials=creds)
-        request_body = {'labelIds': ['INBOX'], 'topicName': f"projects/{PROJECT_ID}/topics/gmail-events"}
+        request_body = {'labelIds': ['INBOX'], 'topicName': f"projects/{PROJECT_ID}/topics/{TOPIC_NAME}"}
         gmail_service.users().watch(userId='me', body=request_body).execute()
         watch_status = "Active"
     except Exception as e:
@@ -162,4 +164,4 @@ async def callback(
     
     await user_repo.create_or_update_user(user_data)
 
-    return RedirectResponse(f"http://localhost:3000/success?email={email}&status={watch_status}")
+    return RedirectResponse(f"{FRONTEND_URL}/success?email={email}&status={watch_status}")

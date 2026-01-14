@@ -51,7 +51,6 @@ class MongoUserRepository(IUserRepository):
         await self._collection.update_one(
             {"email": user_data["email"]},
             {"$set": user_data},
-            {"$set": {"custom_prompt": ""}},
             upsert=True
         )
 

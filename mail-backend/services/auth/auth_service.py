@@ -27,9 +27,9 @@ class GoogleAuthService(IAuthService):
         Initialize GoogleAuthService with OAuth configuration.
         """
         # Load client secrets from environment variable
-        client_secrets_str = os.getenv("GOOGLE_CLIENT_SECRETS")
+        client_secrets_str = os.getenv("GOOGLE_CLIENT_SECRETS_JSON")
         if not client_secrets_str:
-            raise ValueError("GOOGLE_CLIENT_SECRETS environment variable not set")
+            raise ValueError("GOOGLE_CLIENT_SECRETS_JSON environment variable not set")
         self._client_config = json.loads(client_secrets_str)
 
         self._scopes = [
