@@ -11,7 +11,6 @@ from common.database import Database
 from common.user_repository import MongoUserRepository
 from common.email_repository import MongoEmailRepository
 from services.auth.auth_service import GoogleAuthService
-from services.auth.user_service import UserService
 from services.email_processor.email_processor import EmailProcessor
 from core.config import settings
 
@@ -38,15 +37,6 @@ class Dependencies:
         # Initialize repositories
         self._user_repository = MongoUserRepository(self._database)
         self._email_repository = MongoEmailRepository(self._database)
-
-    def get_user_service(self) -> UserService:
-        """
-        Create and return UserService instance.
-
-        Returns:
-            Configured UserService with dependencies injected.
-        """
-        return UserService(self._user_repository)
 
     def get_auth_service(self) -> GoogleAuthService:
         """

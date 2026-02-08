@@ -1,100 +1,59 @@
 import os
-import json
-import asyncio
 import sys
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Response
 from dotenv import load_dotenv
 
-# --- 1. LOAD ENV FIRST ---
-load_dotenv()
+# Add root directory to python path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(BASE_DIR)
 
-# --- 2. CONFIGURATION ---
-PROJECT_ID = os.getenv("PROJECT_ID")
-SERVICE_ACCOUNT_JSON_STR = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-# Use env variable for subscription ID, with a default
-GMAIL_SUBSCRIPTION_ID = os.getenv("GMAIL_SUBSCRIPTION_ID", "gmail-events-sub")
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-if not PROJECT_ID:
-    print("ERROR: PROJECT_ID is missing. Check .env", file=sys.stderr)
-    sys.exit(1)
-if not SERVICE_ACCOUNT_JSON_STR:
-    print("ERROR: GOOGLE_SERVICE_ACCOUNT_JSON is missing. Check .env", file=sys.stderr)
-    sys.exit(1)
-
-# --- 3. IMPORTS ---
-from google.cloud import pubsub_v1
-from google.oauth2 import service_account
 from common.database import db
 from common.user_repository import MongoUserRepository
 from common.email_repository import MongoEmailRepository
 from services.event_processor.processor import EmailProcessor
+from integrations.factory import IntegrationFactory
 
-# Construct the full subscription path
-SUB_NAME = f"projects/{PROJECT_ID}/subscriptions/{GMAIL_SUBSCRIPTION_ID}"
-MAIN_LOOP = None
-processor = None
+app = FastAPI()
 
-def callback(message):
-    # --- THIS IS THE NEW LOG ---
-    print("[Pub/Sub Callback] Message received from Google Cloud.")
-    try:
-        data = json.loads(message.data.decode('utf-8'))
-        email_address = data.get('emailAddress')
-        history_id = data.get('historyId')
-        
-        print(f"[Event Received] For: {email_address}")
-        
-        if MAIN_LOOP and not MAIN_LOOP.is_closed() and processor:
-            asyncio.run_coroutine_threadsafe(
-                processor.process_event(email_address, history_id), 
-                MAIN_LOOP
-            )
-    except Exception as e:
-        print(f"Error in Pub/Sub callback: {e}", file=sys.stderr)
-    finally:
-        message.ack()
-
-async def main():
-    global MAIN_LOOP, processor
-    MAIN_LOOP = asyncio.get_running_loop()
-    
+@app.on_event("startup")
+async def startup():
     db.connect()
-    
-    # --- Initialize Repositories and Processor ---
+
+@app.on_event("shutdown")
+async def shutdown():
+    db.close()
+
+async def process_email_task(email_address: str, history_id: str):
+    """Wrapper function to run the email processor."""
     user_repo = MongoUserRepository(db.get_db())
     email_repo = MongoEmailRepository(db.get_db())
     processor = EmailProcessor(user_repo, email_repo)
+    await processor.process_event(email_address, history_id)
 
-    # Load credentials directly from the environment variable string
+@app.post("/webhook/{provider}")
+async def webhook(provider: str, request: Request, background_tasks: BackgroundTasks):
+    """
+    Generic webhook endpoint that delegates processing to the correct provider.
+    """
     try:
-        service_account_info = json.loads(SERVICE_ACCOUNT_JSON_STR)
-        creds = service_account.Credentials.from_service_account_info(service_account_info)
+        webhook_processor = IntegrationFactory.get_webhook_processor(provider)
+        result = await webhook_processor.process_webhook(request)
 
-        subscriber = pubsub_v1.SubscriberClient(credentials=creds)
+        # Handle special cases like Outlook's validation response
+        if isinstance(result, Response):
+            return result
+
+        if result:
+            email_address, history_id = result
+            print(f"Webhook processed for {provider}: {email_address}")
+            background_tasks.add_task(process_email_task, email_address, history_id)
+
+        # Acknowledge the message to prevent retries
+        return Response(status_code=204)
+
     except Exception as e:
-        printf(f"CRITICAL ERROR creating SubscriberClient: {e}", file=sys.stderr)
-        return
-    print(f"Listening on subscription: {SUB_NAME}...")
-    
-    future = subscriber.subscribe(SUB_NAME, callback=callback)
-    
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        print("Shutdown signal received...")
-    finally:
-        future.cancel()
-        subscriber.close()
-        db.close()
-        print("Service shut down gracefully.")
-
-if __name__ == "__main__":
-    if sys.platform == 'win32':
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n[STOPPED] User interrupted the process.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}", file=sys.stderr)
+        print(f"Error processing webhook for provider {provider}: {e}", file=sys.stderr)
+        # Return a success status code even on error to prevent the provider from retrying a bad message.
+        return Response(status_code=204)

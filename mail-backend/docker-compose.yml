@@ -6,24 +6,23 @@ services:
       dockerfile: services/auth_service/DockerFile
     ports:
       # Use 8000 as a default if the variables are not in the .env file
-      - "${BACKEND_PORT:-8000}:${PORT:-8000}"
+      - "${BACKEND_PORT:-8000}:8000"
     env_file: .env
     environment:
       - PYTHONPATH=/app
-      # Pass the port into the container, defaulting to 8000
-      - PORT=${PORT:-8000}
+      - PORT=8000
     volumes:
-      # Mount the entire backend for live reloading
       - .:/app
 
-  # 2. Event Processor (Worker)
+  # 2. Event Processor (Webhook)
   event-processor:
     build:
       context: .
       dockerfile: services/event_processor/Dockerfile
+    ports:
+      - "8001:8001"
     env_file: .env
     environment:
       - PYTHONPATH=/app
     volumes:
-      # Mount the entire backend for live reloading
       - .:/app

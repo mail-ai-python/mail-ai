@@ -4,3 +4,7 @@ google-api-python-client
 motor
 google-generativeai
 python-dotenv
+google-auth-oauthlib
+pydantic-settings
+fastapi
+uvicorn

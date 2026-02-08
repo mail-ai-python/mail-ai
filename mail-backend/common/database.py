@@ -8,13 +8,16 @@ class Database:
     client: AsyncIOMotorClient = None
 
     def connect(self):
-        self.client = AsyncIOMotorClient(MONGO_URL)
-        print(f"Connected to MongoDB at {MONGO_URL}")
+        if self.client is None:
+            self.client = AsyncIOMotorClient(MONGO_URL)
+            print(f"Connected to MongoDB at {MONGO_URL}")
 
     def get_db(self):
         return self.client[DB_NAME]
 
     def close(self):
-        self.client.close()
+        if self.client:
+            self.client.close()
+            self.client = None
 
 db = Database()

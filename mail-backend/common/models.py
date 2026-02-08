@@ -9,6 +9,7 @@ class UserSettings(BaseModel):
 class User(BaseModel):
     email: str
     refresh_token: str
+    provider: str
     settings: UserSettings = Field(default_factory=UserSettings)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

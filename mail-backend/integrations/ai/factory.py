@@ -14,10 +14,10 @@ class GeminiService(AIService):
         api_key = os.getenv("GEMINI_API_KEY")
         # Pull model from env, default to 'gemini-1.5-flash' if missing
         self.model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        
+
         if not api_key:
             raise ValueError("GEMINI_API_KEY missing in .env")
-            
+
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(self.model_name)
 
@@ -40,10 +40,10 @@ class OpenAIService(AIService):
 
         api_key = os.getenv("OPENAI_API_KEY")
         self.model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        
+
         if not api_key:
             raise ValueError("OPENAI_API_KEY missing in .env")
-            
+
         self.client = OpenAI(api_key=api_key)
 
     def summarize(self, text: str, prompt: str) -> str:
@@ -65,12 +65,11 @@ class AIFactory:
 
     @staticmethod
     def get_service(provider_name: str) -> AIService:
-        # Re-initialize every time to ensure env var changes are picked up (optional)
-        # or keep the caching logic if you prefer performance.
-        
-        if provider_name == "gemini":
-            return GeminiService()
-        elif provider_name == "openai":
-            return OpenAIService()
-        else:
-            raise ValueError(f"Unknown AI Provider: {provider_name}")
+        if provider_name not in AIFactory._services:
+            if provider_name == "gemini":
+                AIFactory._services[provider_name] = GeminiService()
+            elif provider_name == "openai":
+                AIFactory._services[provider_name] = OpenAIService()
+            else:
+                raise ValueError(f"Unknown AI Provider: {provider_name}")
+        return AIFactory._services[provider_name]

@@ -1,12 +1,13 @@
 from datetime import datetime
 from common.models import EmailLog
 from common.interfaces import IEmailRepository
+from integrations.factory import IntegrationFactory
 
 class ContextEngine:
     def __init__(self, email_repo: IEmailRepository):
         self.email_repo = email_repo
 
-    async def get_thread_context(self, thread_id: str, gmail_service, user_email: str, current_message_id: str, limit: int = 10) -> str:
+    async def get_thread_context(self, user, thread_id: str, current_message_id: str, limit: int = 10) -> str:
         if not thread_id: return ""
 
         existing_logs = await self.email_repo.get_thread_logs(thread_id, limit=100)
@@ -15,8 +16,9 @@ class ContextEngine:
             return self._format_logs(existing_logs[-limit:])
 
         try:
-            thread_data = gmail_service.users().threads().get(userId='me', id=thread_id).execute()
-            messages = thread_data.get('messages', [])
+            provider = user.get("provider", "google")
+            email_provider = IntegrationFactory.get_email_provider(provider)
+            messages = await email_provider.get_thread_history(user, thread_id)
             
             existing_ids = {log['message_id'] for log in existing_logs}
             new_logs_to_create = []
@@ -34,7 +36,7 @@ class ContextEngine:
                 timestamp = datetime.fromtimestamp(internal_date)
 
                 log_entry = EmailLog(
-                    user_email=user_email,
+                    user_email=user["email"],
                     message_id=msg_id,
                     thread_id=thread_id,
                     sender=sender,

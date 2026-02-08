@@ -7,8 +7,8 @@ Principle by handling only configuration concerns.
 """
 
 import os
-from typing import List
-from pydantic import BaseSettings
+from typing import List, Optional
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -55,6 +55,20 @@ class Settings(BaseSettings):
     cors_allow_credentials: bool = True
     cors_allow_methods: List[str] = ["*"]
     cors_allow_headers: List[str] = ["*"]
+
+    # Extra fields from .env
+    backend_port: Optional[str] = None
+    frontend_url: Optional[str] = None
+    gmail_topic_name: Optional[str] = None
+    gmail_subscription_id: Optional[str] = None
+    google_redirect_uri: Optional[str] = None
+    outlook_client_secret_id: Optional[str] = None
+    outlook_client_secret_value: Optional[str] = None
+    default_ai_provider: Optional[str] = None
+    service_account_file: Optional[str] = None
+    google_service_account_json: Optional[str] = None
+    google_client_secrets_json: Optional[str] = None
+    summary_prompt: Optional[str] = None
 
     class Config:
         env_file = ".env"
